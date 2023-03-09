@@ -5,17 +5,35 @@ library(broom)
 library(rms)
 library(scales)
 
-df <- read.table("3.txt",row.names = 1, header = T, sep = "\t")
+#线性回归
+df <- read.table("Awareness.txt",row.names = 1, header = T, sep = "\t")
 # 将变量转为因子
 df <- data.frame(lapply(df,factor))
-vars <- colnames(df)[1:10]
+vars <- colnames(df)[1:11]
+
+#如果是分类变量，需要进行因子转换,就不需要run上面factor了
+df$sample.source <- factor(df$sample.source, levels = c(1,2,3), labels = c("戒毒所","社区","美沙酮门诊"))
+df$sex <- factor(df$sex, levels = c(1,2), labels = c("男性","女性"))
+df$age <- factor(df$age, levels = c(1,2,3,4), labels = c("11~","21~","31~",">41"))
+df$marriage <- factor(df$marriage, levels = c(1,2), labels = c("未婚或丧偶","同居或已婚"))
+df$ethnic <- factor(df$ethnic, levels = c(1,2,3), labels = c("汉族","壮族","其他"))
+df$Education <- factor(df$Education, levels = c(1,2,3,4), labels = c("未接受教育","小学","初中","高中及以上"))
+df$G01 <- factor(df$G01, levels = c(0,1), labels = c("否","是"))
+df$G02 <- factor(df$G02, levels = c(0,1), labels = c("否","是"))
+df$G03Peer.education <- factor(df$G03Peer.education, levels = c(0,1), labels = c("否","是"))
+df$HIV <- factor(df$HIV, levels = c(0,1), labels = c("否","是"))
+df$syphilis <- factor(df$syphilis, levels = c(0,1), labels = c("否","是"))
+df$inject.group <- factor(df$inject.group, levels = c(0,1), labels = c("否","是"))
+df$condom.group <- factor(df$condom.group, levels = c(0,1), labels = c("否","是"))
+df$lv <- factor(df$lv, levels = c(0,1), labels = c("否","是"))
+
 
 #结果输入成vector
 result_list <- list()
 
 # for循环进行单因素回归
 for (i in vars) {
-  model <- glm(paste0("awareness ~", i), data = df, family = binomial())
+  model <- glm(paste0("condom.group ~", i), data = df, family = binomial())
   result <- tidy(model)
   OR <- round(exp(coef(model)),3)
   OR_ci <- round(confint(model) %>% exp(),3)
@@ -27,9 +45,11 @@ for (i in vars) {
 # 合并结果
 result_df <- bind_rows(result_list)
 
+write.csv(result_df,"result_df.csv", quote=F, row.names = T)
+
 # for循环进行单因素回归
 for (i in vars) {
-  model <- glm(paste0("awareness ~", i), data = df, family = binomial())
+  model <- glm(paste0("condom.group ~", i), data = df, family = binomial())
   result <- tidy(model)
   OR <- round(exp(coef(model)),3)
   OR_ci <- round(exp(confint(model)),3)
@@ -42,11 +62,13 @@ model_result <- bind_rows(result_list) %>%
   unnest(result, OR, OR_ci) %>% 
   select(var, term, estimate, std.error, statistic, p_value, OR, OR_ci)
 
+write.csv(model_result,"model_result.csv", quote=F, row.names = T)
+
 
 #map循环进行单因素回归
 model = tibble(vars) %>% 
   mutate(model = map(df[vars], 
-                     ~ glm(awareness ~ .x, data = df, family = binomial()))) %>% 
+                     ~ glm(lv ~ .x, data = df, family = binomial()))) %>% 
   #用tidy函数提取模型结果转换成数据框
   mutate(result = map(model, tidy),
          OR = map(model, ~ exp(coef(.x))),
@@ -66,10 +88,10 @@ result_sin = model %>%
   select(vars, term, `OR(95%CI)`, p.value, OR, ci5, ci95, ) %>% 
   mutate(p.value = pvalue(p.value))
 
-write.csv(result_sin,"result_sin.csv", quote=F, row.names = T)
+write.csv(result_sin,"result_sin.csv", fileEncoding="GB18030",quote=F, row.names = T)
 
 #提取单因素p<0.05进入多因素
-mul_glm_model <- as.formula(paste0("awareness ~",
+mul_glm_model <- as.formula(paste0("lv ~",
                             paste0(result_sin$vars[result_sin$p.value<0.05],
                             collapse = "+")))
 
@@ -92,7 +114,5 @@ mul_P <- round(mul_glm_result$coefficients[,4],4)
 result_mul <- data.frame("estimate"=mul_estimate,"mul_OR"= mul_OR,"mul_CI"= mul_CI,"mul_P"= mul_P)[-1,]
 result_mul$mul_P[result_mul$mul_P==0] <- "<0.001"
 
-write.csv(result_mul,"result_mul.csv", quote=F, row.names = T)
-
-
+write.csv(result_mul,"result_mul.csv", fileEncoding="GB18030",quote=F, row.names = T)
 
